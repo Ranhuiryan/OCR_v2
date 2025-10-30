@@ -1,0 +1,2 @@
+
+该文件夹用于存储 mineru_output

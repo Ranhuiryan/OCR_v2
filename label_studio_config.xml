@@ -1,0 +1,24 @@
+<View>
+  <Style>
+    .lsf-main-content.lsf-requesting .lsf-htx-img { opacity: 0.5; }
+    [data-label^="Figure"] { border: 2px solid #9370DB !important; }
+    [data-label^="Table"] { border: 2px solid #FF6347 !important; }
+    [data-label^="Formula"] { border: 2px solid #32CD32 !important; }
+  </Style>
+  <Image name="image" value="$image" zoom="true" zoomControl="true" rotateControl="true"/>
+  <Header value="Recognized Content"/>
+  
+  <RectangleLabels name="bbox" toName="image">
+    <Label value="Para" background="#00FF00" />
+    <Label value="Title" background="#FFA500" />
+    <Label value="List" background="#87CEEB" />
+    <Label value="Table" background="#FF6347" />
+    <Label value="Figure" background="#9370DB" />
+    <Label value="Footer" background="#C0C0C0" />
+    <Label value="Header" background="#C0C0C0" />
+    <Label value="Formula" background="#32CD32" />
+    <Label value="Unknown" background="#F08080" />
+  </RectangleLabels>
+  
+  <TextArea name="transcription" toName="image" editable="true" perRegion="true" required="false" rows="1" placeholder="Recognized text" displayMode="region-list"/>
+</View>

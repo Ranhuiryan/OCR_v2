@@ -1,0 +1,161 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16
+    container_name: ocr_postgres_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=ocr_pipeline_db
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test1234
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: ocr_redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  # ====================================================================
+  # Backend 服务 - Django API
+  # ====================================================================
+  backend:
+    build: 
+      context: ./backend
+      args:
+        # 构建时参数：模型源配置
+        MINERU_MODEL_SOURCE: ${MINERU_MODEL_SOURCE:-modelscope}
+    container_name: ocr_backend
+    command: >
+      sh -c "python manage.py migrate && 
+             gunicorn backend.wsgi:application --bind 0.0.0.0:8010 --workers 4 --timeout 300"
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    ports:
+      - "8010:8010"
+    depends_on:
+      - db
+      - redis
+    environment:
+      - LOCAL_DATA_PATH=/
+      - POSTGRES_NAME=ocr_pipeline_db
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test1234
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - LABEL_STUDIO_URL=${LABEL_STUDIO_URL:-http://label-studio:8080}
+      - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY}
+      - LABEL_STUDIO_PROJECT_ID=${LABEL_STUDIO_PROJECT_ID:-1}
+      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://localhost:8010}
+    restart: unless-stopped
+
+  # ====================================================================
+  # Celery Worker 服务 - 异步任务处理（GPU 加速版本）
+  # ====================================================================
+  celery:
+    build: 
+      context: ./backend
+      args:
+        MINERU_MODEL_SOURCE: ${MINERU_MODEL_SOURCE:-modelscope}
+    container_name: ocr_celery_worker
+    command: celery -A backend worker -l info --concurrency=${CELERY_CONCURRENCY:-2}
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+      - mineru_models:/root/.cache        # 模型缓存持久化，避免重复下载
+    depends_on:
+      - backend
+    environment:
+      - LOCAL_DATA_PATH=/
+      - POSTGRES_NAME=ocr_pipeline_db
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test1234
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - MINERU_MODEL_SOURCE=${MINERU_MODEL_SOURCE:-modelscope}
+      - LABEL_STUDIO_URL=${LABEL_STUDIO_URL:-http://label-studio:8080}
+      - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY}
+      - LABEL_STUDIO_PROJECT_ID=${LABEL_STUDIO_PROJECT_ID:-1}
+      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://localhost:8010}
+      # GPU 相关环境变量
+      - NVIDIA_VISIBLE_DEVICES=${GPU_DEVICE_IDS:-all}
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    restart: unless-stopped
+    # GPU 配置（需要 Docker Compose v1.28+ 和 nvidia-docker）
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: ${GPU_COUNT:-1}
+              capabilities: [gpu]
+
+  # ====================================================================
+  # Frontend 服务 - Vue.js 前端
+  # ====================================================================
+  frontend:
+    build: ./frontend
+    container_name: ocr_frontend
+    ports:
+      - "${FRONTEND_PORT:-8082}:8082"
+    depends_on:
+      - backend
+    environment:
+      # 动态配置后端 API 地址
+      - VUE_APP_API_BASE_URL=${VUE_APP_API_BASE_URL:-http://localhost:8010/api}
+      - VUE_APP_LABEL_STUDIO_URL=${VUE_APP_LABEL_STUDIO_URL:-http://localhost:8081}
+    restart: unless-stopped
+      
+  # ====================================================================
+  # Label Studio 服务 - 数据标注工具
+  # ====================================================================
+  label-studio:
+    image: heartexlabs/label-studio:latest
+    container_name: ocr_label_studio
+    ports:
+      - "${LABEL_STUDIO_PORT:-8081}:8080"
+    volumes:
+      - ./data:/label-studio/data
+      - label_studio_data:/label-studio
+    # 容器启动时先修复权限再启动 Label Studio
+    entrypoint: >
+      sh -c "
+      echo 'Fixing permissions for /label-studio/data...' &&
+      chmod -R 777 /label-studio/data 2>/dev/null || true &&
+      chown -R $(id -u):$(id -g) /label-studio/data 2>/dev/null || true &&
+      find /label-studio/data -type f -name '*.sqlite3' -exec chmod 666 {} \; 2>/dev/null || true &&
+      find /label-studio/data -type d -exec chmod 777 {} \; 2>/dev/null || true &&
+      echo 'Permissions fixed. Starting Label Studio...' &&
+      exec /label-studio/deploy/docker-entrypoint.sh label-studio
+      "
+    environment:
+      - LABEL_STUDIO_LOCAL_FILES_SERVING_ENABLED=true
+      - LABEL_STUDIO_LOCAL_FILES_DOCUMENT_ROOT=/label-studio/data
+      - DJANGO_SETTINGS_MODULE=label_studio.core.settings.label_studio
+      - DISABLE_LEGACY_TOKEN_AUTHENTICATION=false
+      # 允许注册和跨域访问
+      - LABEL_STUDIO_DISABLE_SIGNUP_WITHOUT_LINK=false
+      - SSRF_PROTECTION_ENABLED=false
+      # 禁用安全策略以支持非 HTTPS 远程部署（开发环境）
+      - LABEL_STUDIO_CORS_ALLOW_ALL_ORIGINS=true
+      - LABEL_STUDIO_CSP_ENABLED=false
+      # 禁用外部追踪和分析
+      - LABEL_STUDIO_DISABLE_ANALYTICS=true
+      - LABEL_STUDIO_DISABLE_SENTRY=true
+    # 添加 host.docker.internal 映射，允许容器访问宿主机服务
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  label_studio_data:
+  mineru_models:      # MinerU 模型缓存，避免重复下载
