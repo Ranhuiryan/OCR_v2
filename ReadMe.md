@@ -407,3 +407,11 @@ login/?next=%2F:110  [Report Only] Refused to frame 'https://labelstud.io/' beca
 login/?next=%2F:1  Tracking Prevention blocked access to storage for https://www.redditstatic.com/ads/pixel.js.
 
 只需要将./data/label_studio.sqlite3 的权限修改为666即可
+
+# 在部署时，需要在env中修改相应ip，需要修改的变量如下：
+# 如果留空，将自动使用访问前端的主机地址
+VUE_APP_API_BASE_URL=http://10.4.34.108:8010/api
+
+# Label Studio 地址（前端访问）
+VUE_APP_LABEL_STUDIO_URL=http://10.4.34.108:8081
+BACKEND_EXTERNAL_URL=http://10.4.34.108:8010
