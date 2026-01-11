@@ -17,8 +17,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ocr_redis
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     restart: unless-stopped
 
   # ====================================================================

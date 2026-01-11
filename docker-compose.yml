@@ -17,8 +17,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: ocr_redis
-    ports:
-      - "6379:6379"
+    # ports:
+    #   - "6379:6379"
     restart: unless-stopped
 
   # ====================================================================
@@ -54,7 +54,7 @@ services:
       - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY}
       - LABEL_STUDIO_PROJECT_ID=${LABEL_STUDIO_PROJECT_ID:-1}
       # 浏览器访问图片用 localhost（Label Studio 在浏览器中加载图片）
-      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://10.4.34.108:8010}
+      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://localhost:8010}
     restart: unless-stopped
 
   # ====================================================================
@@ -87,7 +87,7 @@ services:
       - LABEL_STUDIO_API_KEY=${LABEL_STUDIO_API_KEY}
       - LABEL_STUDIO_PROJECT_ID=${LABEL_STUDIO_PROJECT_ID:-1}
       # 浏览器访问图片用 localhost（Label Studio 在浏览器中加载图片）
-      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://10.4.34.108:8010}
+      - BACKEND_EXTERNAL_URL=${BACKEND_EXTERNAL_URL:-http://localhost:8010}
     restart: unless-stopped
     # GPU 配置（需要 Docker Compose v1.28+ 和 nvidia-docker）
     # 取消下面的注释以启用 GPU 支持
@@ -111,8 +111,8 @@ services:
       - backend
     environment:
       # 动态配置后端 API 地址
-      - VUE_APP_API_BASE_URL=${VUE_APP_API_BASE_URL:-http://10.4.34.108:8010/api}
-      - VUE_APP_LABEL_STUDIO_URL=${VUE_APP_LABEL_STUDIO_URL:-http://10.4.34.108:8081}
+      - VUE_APP_API_BASE_URL=${VUE_APP_API_BASE_URL:-http://localhost:8010/api}
+      - VUE_APP_LABEL_STUDIO_URL=${VUE_APP_LABEL_STUDIO_URL:-http://localhost:8081}
     restart: unless-stopped
       
   # ====================================================================

@@ -11,6 +11,10 @@ psycopg2-binary
 celery
 redis
 
+PyJWT
+
+accelerate
+
 pdf2image
 unidecode
 mineru 
